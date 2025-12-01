@@ -1,102 +1,70 @@
-use winnow::Parser;
-use winnow::ascii::dec_uint;
-use winnow::combinator::alt;
-
-#[derive(Debug, Copy, Clone)]
-pub enum Direction {
-    Left,
-    Right,
-}
-
-#[derive(Debug, Copy, Clone)]
-struct Instruction {
-    direction: Direction,
-    amount: u32,
-}
-
-type Prepared = Vec<Instruction>;
-
-fn prepare(input: &str) -> Prepared {
-    input
-        .lines()
-        .map(|l| {
-            (
-                alt(("L".value(Direction::Left), "R".value(Direction::Right))),
-                dec_uint::<_, _, ()>,
-            )
-                .map(|(direction, amount)| Instruction { direction, amount })
-                .parse(l)
-                .unwrap()
-        })
-        .collect()
-}
-
-fn p1(input: &Prepared) -> u32 {
-    let mut position: u32 = 50;
-    let mut times_pointed_at_zero = 0;
-    for instruction in input {
-        let amount = instruction.amount % 100;
-        match instruction.direction {
-            Direction::Left => {
-                if position < amount {
-                    position += 100;
-                }
-                position -= amount;
-            }
-            Direction::Right => {
-                position += amount;
-                if position >= 100 {
-                    position -= 100;
-                }
-            }
-        }
-        if position == 0 {
-            times_pointed_at_zero += 1;
+fn number(input: &[u8], i: &mut usize) -> u16 {
+    let mut amount = 0;
+    while *i < input.len() {
+        let c = input[*i];
+        *i += 1;
+        match c {
+            b'0'..=b'9' => amount = amount * 10 + (c - b'0') as u16,
+            _ => break,
         }
     }
-    times_pointed_at_zero
+    amount
 }
 
-fn p2(input: &Prepared) -> u32 {
-    let mut position: u32 = 50;
-    let mut times_pointed_at_zero = 0;
-    for instruction in input {
-        times_pointed_at_zero += instruction.amount / 100;
-        let amount = instruction.amount % 100;
-        match instruction.direction {
-            Direction::Left => {
-                if position < amount {
-                    if position != 0 {
-                        times_pointed_at_zero += 1;
-                    }
-                    position += 100;
+fn prepare(input: &str) -> impl IntoIterator<Item = i16> {
+    let input = input.as_bytes();
+    let mut i = 0;
+
+    std::iter::from_fn(move || {
+        if i >= input.len() {
+            return None;
+        }
+        let sign = (input[i] & 2) as i16 - 1;
+        i += 1;
+
+        let amount = number(input, &mut i);
+        Some(sign * amount as i16)
+    })
+}
+
+fn both(input: impl IntoIterator<Item = i16>) -> (u32, u32) {
+    let mut position: i16 = 50;
+    let mut times_pointed_at_zero_exactly = 0;
+    let mut times_passed_zero = 0;
+
+    for amount in input {
+        times_passed_zero += amount.abs() / 100;
+        let amount = amount % 100;
+        if amount < 0 {
+            if position + amount < 0 {
+                if position != 0 {
+                    times_passed_zero += 1;
                 }
-                position -= amount;
+                position += 100;
             }
-            Direction::Right => {
-                position += amount;
-                if position >= 100 {
-                    position -= 100;
-                    if position != 0 {
-                        times_pointed_at_zero += 1;
-                    }
+            position += amount;
+        } else {
+            position += amount;
+            if position >= 100 {
+                if position != 100 {
+                    times_passed_zero += 1;
                 }
+                position -= 100;
             }
         }
+
         if position == 0 {
-            times_pointed_at_zero += 1;
+            times_pointed_at_zero_exactly += 1;
         }
     }
-    times_pointed_at_zero
+    (
+        times_pointed_at_zero_exactly,
+        times_passed_zero as u32 + times_pointed_at_zero_exactly,
+    )
 }
 
 crate::register!(SOLVER, 1, |ctx, input| {
-    let input = ctx.measure("prepare", || prepare(input));
-    (
-        ctx.measure("part1", || p1(&input)),
-        ctx.measure("part2", || p2(&input)),
-    )
-        .into()
+    ctx.measure("all", || both(prepare(input))).into()
 });
 
 #[cfg(test)]
@@ -114,13 +82,21 @@ L99
 R14
 L82";
 
+    fn p1(input: impl IntoIterator<Item = i16>) -> u32 {
+        both(input).0
+    }
+
+    fn p2(input: impl IntoIterator<Item = i16>) -> u32 {
+        both(input).1
+    }
+
     #[test]
     fn example_part1() {
-        assert_eq!(p1(&prepare(EXAMPLE_INPUT)), 3);
+        assert_eq!(p1(prepare(EXAMPLE_INPUT)), 3);
     }
 
     #[test]
     fn example_part2() {
-        assert_eq!(p2(&prepare(EXAMPLE_INPUT)), 6);
+        assert_eq!(p2(prepare(EXAMPLE_INPUT)), 6);
     }
 }
