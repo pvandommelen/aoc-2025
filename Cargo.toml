@@ -1,0 +1,29 @@
+[package]
+name = "aoc-2025"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+doctest = false
+
+[dependencies]
+clap = { version = "4.5.50", features = ["derive"] }
+indexmap = "2.12.1"
+linkme = "0.3.35"
+ureq = "3.1.4"
+
+[dev-dependencies]
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.release]
+debug = "line-tables-only"
+panic = "abort"
+
+[profile.bench]
+lto = "fat"
+codegen-units = 1
+debug = false
+strip = "symbols"
