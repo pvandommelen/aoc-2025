@@ -14,16 +14,19 @@ fn solve<const N: usize>(input: &Prepared) -> u64 {
             let mut offset = 0;
             let mut result = 0;
             for i in 0..N {
-                let (max_pos, max) = bank[offset..bank.len() + 1 + i - N]
+                let limit = bank.len() + 1 + i - N;
+
+                let max = bank[offset..limit].iter().copied().max().unwrap();
+                let max_pos = bank[offset..limit]
                     .iter()
-                    .enumerate()
-                    .rev()
-                    .max_by_key(|(_, num)| *num)
+                    .copied()
+                    .position(|c| c == max)
                     .unwrap();
 
                 offset += max_pos + 1;
-                result = result * 10 + *max as u64;
+                result = result * 10 + max as u64;
             }
+
             result
         })
         .sum()
