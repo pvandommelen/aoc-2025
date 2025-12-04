@@ -1,17 +1,21 @@
 use crate::util::grid::Grid;
 use std::iter::{once, repeat};
 
-type Prepared = Grid<bool>;
+type Prepared = Grid<u8>;
 
 fn prepare(input: &str) -> Prepared {
     let width = input.lines().next().unwrap().as_bytes().len();
-    let empty_row = repeat(false).take(width + 2).collect::<Vec<_>>();
+    let empty_row = repeat(0).take(width + 2).collect::<Vec<_>>();
     Grid::from_rows(
         once(empty_row.clone())
             .chain(input.lines().map(|line| {
-                once(false)
-                    .chain(line.as_bytes().iter().map(|c| *c == b'@'))
-                    .chain(once(false))
+                once(0)
+                    .chain(
+                        line.as_bytes()
+                            .iter()
+                            .map(|c| if *c == b'@' { 1 } else { 0 }),
+                    )
+                    .chain(once(0))
                     .collect::<Vec<_>>()
             }))
             .chain(once(empty_row)),
@@ -20,26 +24,48 @@ fn prepare(input: &str) -> Prepared {
 
 fn p1(input: &Prepared) -> u64 {
     input
-        .iter_windows3_where(|b| *b)
-        .filter(|w| w.iter().filter(|c| **c == true).count() < 5)
+        .iter_windows3_where(|b| *b == 1)
+        .filter(|w| w.iter().sum::<u8>() < 5)
         .count() as u64
 }
 
 fn p2(input: &Prepared) -> u64 {
-    let mut grid = input.clone();
+    let grid = input
+        .rows()
+        .map(|row| row.iter().copied().collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+
+    let mut counts = grid.clone();
+    for j in 1..grid.len() - 1 {
+        for i in 1..grid[j].len() - 1 {
+            let a = grid[j - 1][i - 1..i + 2].iter().copied().sum::<u8>();
+            let b = grid[j][i - 1..i + 2].iter().copied().sum::<u8>();
+            let c = grid[j + 1][i - 1..i + 2].iter().copied().sum::<u8>();
+            let sum: u8 = a + b + c;
+            counts[j][i] += sum * 2;
+        }
+    }
+
     let mut removed = 0;
     loop {
-        let previous_grid = grid.clone();
-        let positions = previous_grid
-            .iter_windows3_where(|b| *b)
-            .filter(|w| w.iter().filter(|c| **c == true).count() < 5)
-            .map(|w| w.position());
-
         let mut any_removed = false;
-        for p in positions {
-            removed += 1;
-            any_removed = true;
-            assert!(grid.remove(&p));
+        for j in 1..counts.len() - 1 {
+            for i in 1..counts[j].len() - 1 {
+                if counts[j][i] & 1 == 1 && counts[j][i] < 10 {
+                    removed += 1;
+                    any_removed = true;
+                    counts[j][i] ^= 1;
+                    for num in counts[j - 1][i - 1..i + 2].iter_mut() {
+                        *num = num.saturating_sub(2);
+                    }
+                    for num in counts[j][i - 1..i + 2].iter_mut() {
+                        *num = num.saturating_sub(2);
+                    }
+                    for num in counts[j + 1][i - 1..i + 2].iter_mut() {
+                        *num = num.saturating_sub(2);
+                    }
+                }
+            }
         }
         if !any_removed {
             break;
