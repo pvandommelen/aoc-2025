@@ -22,7 +22,7 @@ pub fn read_input(day: u8) -> String {
             .call()
             .unwrap();
             let input = input.body_mut().read_to_string().unwrap();
-            let input = input.trim().to_string();
+            let input = input.to_string();
             std::fs::write(&filepath, &input).unwrap();
             input
         }

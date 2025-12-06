@@ -7,6 +7,7 @@ type Prepared = Vec<RangeInclusive<u64>>;
 
 fn prepare(input: &str) -> Prepared {
     input
+        .trim()
         .split(',')
         .map(|l| {
             separated_pair(dec_uint::<_, u64, ()>, '-', dec_uint)
