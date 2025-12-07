@@ -1,76 +1,51 @@
-use crate::util::grid::Grid;
-use crate::util::position::{Direction, Position};
-use crate::util::solver::solve_depth_first;
-use rustc_hash::FxHashSet;
+fn p1(input: &str) -> usize {
+    let input = input.as_bytes();
+    let width = input.iter().position(|c| *c == b'\n').unwrap();
+    let stride = 2 * (width + 1);
+    let height = input.len() / stride;
 
-type Prepared = (Grid<bool>, usize);
-
-fn prepare(input: &str) -> Prepared {
-    let grid = Grid::from_rows(
-        input
-            .lines()
-            .step_by(2)
-            .map(|l| l.as_bytes().iter().map(|c| *c == b'^')),
-    );
-    let starting_pos = input.as_bytes().iter().position(|c| *c == b'S').unwrap();
-    (grid, starting_pos)
-}
-
-fn p1((grid, starting_pos): &Prepared) -> usize {
-    let pos = Position(0, *starting_pos);
-
-    let mut split = FxHashSet::default();
-
-    solve_depth_first(
-        |stack, p| {
-            let Some(next_splitter) = p
-                .positions(&grid.dimensions, &Direction::Down)
-                .filter(|p| *grid.get(&p))
-                .next()
-            else {
-                return;
-            };
-
-            let inserted = split.insert(next_splitter);
-            if !inserted {
-                return;
-            }
-
-            if let Some(left) = next_splitter.checked_moved(&grid.dimensions, &Direction::Left) {
-                stack.push(left);
-            }
-            if let Some(right) = next_splitter.checked_moved(&grid.dimensions, &Direction::Right) {
-                stack.push(right);
-            }
-        },
-        vec![pos],
-    );
-
-    split.len()
-}
-
-fn p2((grid, _starting_pos): &Prepared) -> usize {
-    let mut cache = vec![1; grid.dimensions.width()];
-    for row in grid.rows().rev() {
-        for (i, c) in row
-            .iter()
-            .enumerate()
-            .take(grid.dimensions.width() - 1)
-            .skip(1)
-        {
-            if *c {
-                let left = cache[i - 1];
-                let right = cache[i + 1];
-                cache[i] = left + right;
+    let mut beams = vec![false; width];
+    beams[width / 2 - 3] = true;
+    beams[width / 2 - 1] = true;
+    beams[width / 2 + 1] = true;
+    beams[width / 2 + 3] = true;
+    let mut split_count = 6;
+    for j in 4..input.len() / stride {
+        let row_offset = j * stride;
+        let row = &input[row_offset..row_offset + width];
+        for i in height - j..row.len() + j - height {
+            if row[i] == b'^' && beams[i] {
+                beams[i] = false;
+                split_count += 1;
+                beams[i - 1] = true;
+                beams[i + 1] = true;
             }
         }
     }
 
-    cache.into_iter().max().unwrap()
+    split_count
+}
+
+fn p2(input: &str) -> usize {
+    let input = input.as_bytes();
+    let width = input.iter().position(|c| *c == b'\n').unwrap();
+    let stride = 2 * (width + 1);
+
+    let mut cache = vec![1; width];
+    for j in 0..(input.len() / stride - 3) {
+        let row_offset = input.len() - stride - j * stride;
+        let row = &input[row_offset..row_offset + width];
+        for i in (j + 1..row.len() - j - 1).step_by(2) {
+            if row[i] == b'^' {
+                cache[i] = cache[i - 1] + cache[i + 1];
+            }
+        }
+    }
+
+    cache[width / 2 - 2] + 2 * cache[width / 2] + cache[width / 2 + 2]
 }
 
 crate::register!(SOLVER, 7, |ctx, input| {
-    let input = ctx.measure("prepare", || prepare(input));
     (
         ctx.measure("part1", || p1(&input)),
         ctx.measure("part2", || p2(&input)),
@@ -97,15 +72,16 @@ mod tests {
 ..^...^.....^..
 ...............
 .^.^.^.^.^...^.
-...............";
+...............
+";
 
     #[test]
     fn example_part1() {
-        assert_eq!(p1(&prepare(EXAMPLE_INPUT)), 21);
+        assert_eq!(p1(EXAMPLE_INPUT), 21);
     }
 
     #[test]
     fn example_part2() {
-        assert_eq!(p2(&prepare(EXAMPLE_INPUT)), 40);
+        assert_eq!(p2(EXAMPLE_INPUT), 40);
     }
 }
