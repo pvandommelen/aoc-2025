@@ -112,7 +112,9 @@ impl<T> Grid<T> {
         self.data[idx] = value;
     }
 
-    pub fn rows(&self) -> impl Iterator<Item = &[T]> + '_ {
+    pub fn rows(
+        &self,
+    ) -> impl Iterator<Item = &[T]> + DoubleEndedIterator + ExactSizeIterator + '_ {
         self.data.chunks_exact(self.dimensions.1)
     }
 
