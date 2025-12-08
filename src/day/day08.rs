@@ -1,7 +1,7 @@
-use crate::util::solver::solve_depth_first;
-use rustc_hash::FxHashMap;
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 
-type Prepared = (Vec<[u32; 3]>, Vec<(usize, usize)>);
+type Prepared = (Vec<[u32; 3]>, BinaryHeap<(Reverse<u64>, usize, usize)>);
 
 fn dist_squared(a: [u32; 3], b: [u32; 3]) -> u64 {
     a.into_iter()
@@ -27,7 +27,7 @@ fn parse(input: &str) -> Vec<[u32; 3]> {
 }
 
 fn prepare(junctions: Vec<[u32; 3]>) -> Prepared {
-    let mut distances = junctions
+    let connections = junctions
         .iter()
         .enumerate()
         .flat_map(|(i, a)| {
@@ -35,76 +35,42 @@ fn prepare(junctions: Vec<[u32; 3]>) -> Prepared {
                 .iter()
                 .enumerate()
                 .skip(i + 1)
-                .map(move |(j, b)| (i, j, dist_squared(*a, *b)))
+                .map(move |(j, b)| (Reverse(dist_squared(*a, *b)), i, j))
         })
-        .collect::<Vec<_>>();
-
-    distances.sort_unstable_by_key(|(_, _, dist)| *dist);
-
-    let connections = distances.into_iter().map(|(i, j, _)| (i, j)).collect();
+        .collect::<BinaryHeap<_>>();
 
     (junctions, connections)
 }
 
-fn p1((junctions, connections): &Prepared, connection_count: usize) -> usize {
-    let connections = connections.iter().copied().take(connection_count).fold(
-        vec![vec![]; junctions.len()],
-        |mut acc, (a, b)| {
-            acc[a].push(b);
-            acc[b].push(a);
-            acc
-        },
-    );
-
-    let mut reached: Vec<Option<usize>> = vec![None; junctions.len()];
-
-    for i in 0..junctions.len() {
-        if reached[i].is_some() {
-            continue;
-        }
-
-        solve_depth_first(
-            |stack, s| {
-                reached[s] = Some(i);
-                for b in &connections[s] {
-                    if reached[*b].is_some() {
-                        continue;
-                    }
-                    stack.push(*b);
-                }
-            },
-            vec![i],
-        );
-    }
-
-    let mut counts = FxHashMap::default();
-    for num in reached.into_iter().map(|reached| reached.unwrap()) {
-        *counts.entry(num).or_default() += 1;
-    }
-
-    let mut counts = counts.into_values().collect::<Vec<usize>>();
-    counts.sort_unstable_by(|a, b| b.cmp(a));
-    counts[0] * counts[1] * counts[2]
-}
-
-fn p2((junctions, connections): &Prepared) -> u64 {
+fn both((junctions, connections): Prepared, connection_count: usize) -> (usize, u64) {
     let mut junction_to_circuit = Vec::from_iter(0..junctions.len());
     let mut circuit_to_junctions = Vec::from_iter((0..junctions.len()).map(|i| vec![i]));
     let mut number_of_circuits = junctions.len();
-    for (a, b) in connections.iter().copied() {
+
+    let mut connections = connections.clone();
+    let mut p1 = None;
+    let mut i = 0;
+    while let Some((_, a, b)) = connections.pop() {
         let x = junction_to_circuit[a];
         let y = junction_to_circuit[b];
         if x != y {
             // Different networks, combine.
             number_of_circuits -= 1;
             if number_of_circuits == 1 {
-                return junctions[a][0] as u64 * junctions[b][0] as u64;
+                return (p1.unwrap(), junctions[a][0] as u64 * junctions[b][0] as u64);
             }
             for other in &circuit_to_junctions[y] {
                 junction_to_circuit[*other] = x;
             }
             let [x, y] = circuit_to_junctions.get_disjoint_mut([x, y]).unwrap();
             x.extend(y.drain(..));
+        }
+        i += 1;
+        if i == connection_count {
+            let mut counts =
+                Vec::from_iter(circuit_to_junctions.iter().map(|junctions| junctions.len()));
+            counts.sort_unstable_by(|a, b| b.cmp(a));
+            p1 = Some(counts[0] * counts[1] * counts[2]);
         }
     }
     panic!("No solution found");
@@ -113,11 +79,7 @@ fn p2((junctions, connections): &Prepared) -> u64 {
 crate::register!(SOLVER, 8, |ctx, input| {
     let parsed = ctx.measure("parse", || parse(input));
     let prepared = ctx.measure("prepare", || prepare(parsed));
-    (
-        ctx.measure("part1", || p1(&prepared, 1000)),
-        ctx.measure("part2", || p2(&prepared)),
-    )
-        .into()
+    ctx.measure("both", || both(prepared, 1000)).into()
 });
 
 #[cfg(test)]
@@ -145,13 +107,20 @@ mod tests {
 984,92,344
 425,690,689";
 
+    fn p1(prepared: Prepared) -> usize {
+        both(prepared, 10).0
+    }
+    fn p2(prepared: Prepared) -> u64 {
+        both(prepared, 10).1
+    }
+
     #[test]
     fn example_part1() {
-        assert_eq!(p1(&prepare(parse(EXAMPLE_INPUT)), 10), 40);
+        assert_eq!(p1(prepare(parse(EXAMPLE_INPUT))), 40);
     }
 
     #[test]
     fn example_part2() {
-        assert_eq!(p2(&prepare(parse(EXAMPLE_INPUT))), 25272);
+        assert_eq!(p2(prepare(parse(EXAMPLE_INPUT))), 25272);
     }
 }
